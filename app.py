@@ -6,7 +6,7 @@ import streamlit as st
 from PIL import Image
 import cv2
 
-# --- Improve performance by disabling file watcher if needed ---
+# --- Performance tweak: Disable Streamlit's file watcher ---
 os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
 
 # --- Page Config ---
@@ -51,12 +51,11 @@ if st.session_state.design_files:
     for i, file in enumerate(st.session_state.design_files):
         default_name = os.path.splitext(file.name)[0]
         custom_name = st.text_input(
-            f"Name for Design {i+1} ({file.name})", 
+            f"Name for Design {i+1} ({file.name})",
             value=st.session_state.design_names.get(file.name, default_name),
             key=f"name_input_{i}_{file.name}"
         )
         st.session_state.design_names[file.name] = custom_name
-
 
 # --- Helper Function: Bounding Box ---
 def get_shirt_bbox(pil_image):
@@ -70,21 +69,26 @@ def get_shirt_bbox(pil_image):
         return cv2.boundingRect(largest)
     return None
 
-
-# --- Cached Generation Logic ---
-@st.cache_data(show_spinner=False)
-def generate_mockups(design_files, shirt_files, design_names, padding_ratio, model_offset, plain_offset):
+# --- Generate Mockups with Progress Bar & Folders ---
+def generate_mockups_with_progress(design_files, shirt_files, design_names, padding_ratio, model_offset, plain_offset):
     zip_outputs = {}
+    total = len(design_files) * len(shirt_files)
+    progress = st.progress(0, text="Generating mockups...")
 
+    # Preload images into memory for speed
+    shirt_images = {f.name: Image.open(f).convert("RGBA") for f in shirt_files}
+    design_images = {f.name: Image.open(f).convert("RGBA") for f in design_files}
+
+    completed = 0
     for design_file in design_files:
         graphic_name = design_names.get(design_file.name, "graphic")
-        design = Image.open(design_file).convert("RGBA")
+        design = design_images[design_file.name]
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zipf:
             for shirt_file in shirt_files:
                 color_name = os.path.splitext(shirt_file.name)[0]
-                shirt = Image.open(shirt_file).convert("RGBA")
+                shirt = shirt_images[shirt_file.name]
 
                 is_model = "model" in shirt_file.name.lower()
                 offset_pct = model_offset if is_model else plain_offset
@@ -111,36 +115,37 @@ def generate_mockups(design_files, shirt_files, design_names, padding_ratio, mod
                 shirt_copy = shirt.copy()
                 shirt_copy.paste(resized_design, (x, y), resized_design)
 
+                # Each image goes in its own folder named after the design (graphic_name)
                 output_name = f"{graphic_name}_{color_name}_tee.png"
+                foldered_output_path = f"{graphic_name}/{output_name}"
                 img_byte_arr = io.BytesIO()
                 shirt_copy.save(img_byte_arr, format='PNG')
                 img_byte_arr.seek(0)
-                # Put each image inside its own folder (named after the graphic_name)
-                zipf.writestr(f"{graphic_name}/{output_name}", img_byte_arr.getvalue())
+                zipf.writestr(foldered_output_path, img_byte_arr.getvalue())
 
+                completed += 1
+                progress.progress(completed / total, text=f"Generating mockups... ({completed}/{total})")
 
         zip_buffer.seek(0)
         zip_outputs[graphic_name] = zip_buffer
 
+    progress.empty()
     return zip_outputs
-
 
 # --- Run Generation ---
 if st.button("🚀 Generate Mockups"):
     if not (st.session_state.design_files and shirt_files):
         st.warning("Please upload at least one design and one shirt template.")
     else:
-        with st.spinner("Generating mockups... please wait ⏳"):
-            st.session_state.zip_files_output = generate_mockups(
-                st.session_state.design_files,
-                shirt_files,
-                st.session_state.design_names,
-                PADDING_RATIO,
-                model_offset_pct,
-                plain_offset_pct
-            )
+        st.session_state.zip_files_output = generate_mockups_with_progress(
+            st.session_state.design_files,
+            shirt_files,
+            st.session_state.design_names,
+            PADDING_RATIO,
+            model_offset_pct,
+            plain_offset_pct
+        )
         st.success("✅ All mockups generated and centered!")
-
 
 # --- Download Buttons ---
 if st.session_state.zip_files_output:

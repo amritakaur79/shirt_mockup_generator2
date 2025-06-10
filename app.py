@@ -69,11 +69,25 @@ def get_shirt_bbox(pil_image):
         return cv2.boundingRect(largest)
     return None
 
-# --- Generate Mockups with Progress Bar & Folders ---
+# --- Generate Mockups with Progress Bar & Folder Script ---
 def generate_mockups_with_progress(design_files, shirt_files, design_names, padding_ratio, model_offset, plain_offset):
     zip_outputs = {}
     total = len(design_files) * len(shirt_files)
     progress = st.progress(0, text="Generating mockups...")
+
+    # Your batch script as a string
+    batch_script = r"""@echo off
+setlocal enabledelayedexpansion
+
+for %%f in (*.png) do (
+    set "filename=%%~nf"
+    mkdir "!filename!"
+    move "%%f" "!filename!\"
+)
+
+echo All images moved into their own folders.
+pause
+"""
 
     # Preload images into memory for speed
     shirt_images = {f.name: Image.open(f).convert("RGBA") for f in shirt_files}
@@ -86,6 +100,7 @@ def generate_mockups_with_progress(design_files, shirt_files, design_names, padd
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zipf:
+            # Save PNG mockups
             for shirt_file in shirt_files:
                 color_name = os.path.splitext(shirt_file.name)[0]
                 shirt = shirt_images[shirt_file.name]
@@ -115,16 +130,18 @@ def generate_mockups_with_progress(design_files, shirt_files, design_names, padd
                 shirt_copy = shirt.copy()
                 shirt_copy.paste(resized_design, (x, y), resized_design)
 
-                # Each image goes in its own folder named after the design (graphic_name)
                 output_name = f"{graphic_name}_{color_name}_tee.png"
-                foldered_output_path = f"{graphic_name}/{output_name}"
                 img_byte_arr = io.BytesIO()
                 shirt_copy.save(img_byte_arr, format='PNG')
                 img_byte_arr.seek(0)
-                zipf.writestr(foldered_output_path, img_byte_arr.getvalue())
+                zipf.writestr(output_name, img_byte_arr.getvalue())
+
 
                 completed += 1
                 progress.progress(completed / total, text=f"Generating mockups... ({completed}/{total})")
+
+            # After all images for this design, add the batch script
+            zipf.writestr(f"{graphic_name}/folder_script.bat", batch_script)
 
         zip_buffer.seek(0)
         zip_outputs[graphic_name] = zip_buffer

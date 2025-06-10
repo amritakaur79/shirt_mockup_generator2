@@ -141,7 +141,7 @@ pause
                 progress.progress(completed / total, text=f"Generating mockups... ({completed}/{total})")
 
             # After all images for this design, add the batch script
-            zipf.writestr(f"{graphic_name}/folder_script.bat", batch_script)
+            zipf.writestr("folder_script.bat", batch_script)
 
         zip_buffer.seek(0)
         zip_outputs[graphic_name] = zip_buffer

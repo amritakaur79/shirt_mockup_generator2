@@ -115,7 +115,9 @@ def generate_mockups(design_files, shirt_files, design_names, padding_ratio, mod
                 img_byte_arr = io.BytesIO()
                 shirt_copy.save(img_byte_arr, format='PNG')
                 img_byte_arr.seek(0)
-                zipf.writestr(output_name, img_byte_arr.getvalue())
+                # Put each image inside its own folder (named after the graphic_name)
+                zipf.writestr(f"{graphic_name}/{output_name}", img_byte_arr.getvalue())
+
 
         zip_buffer.seek(0)
         zip_outputs[graphic_name] = zip_buffer

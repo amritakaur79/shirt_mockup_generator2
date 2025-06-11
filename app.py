@@ -6,8 +6,10 @@ import streamlit as st
 from PIL import Image
 import cv2
 
+# --- Performance tweak: Disable Streamlit's file watcher ---
 os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
 
+# --- Page Config ---
 st.set_page_config(page_title="Shirt Mockup Generator", layout="centered")
 st.title("👕 Shirt Mockup Generator – Manual Tag for Model Shirts")
 
@@ -16,9 +18,18 @@ Upload **multiple design PNGs** and **shirt templates**.
 Tag shirt mockups as either plain or with a model to fine-tune placement offsets.
 """)
 
+# --- Sidebar Sliders ---
 PADDING_RATIO = st.sidebar.slider("Padding Ratio", 0.1, 1.0, 0.45, 0.05)
 plain_offset_pct = st.sidebar.slider("Vertical Offset – Plain Shirt (%)", -50, 100, -7, 1)
 model_offset_pct = st.sidebar.slider("Vertical Offset – Model Shirt (%)", -50, 100, 3, 1)
+
+# --- Session Setup ---
+if "zip_files_output" not in st.session_state:
+    st.session_state.zip_files_output = {}
+if "design_files" not in st.session_state:
+    st.session_state.design_files = None
+if "design_names" not in st.session_state:
+    st.session_state.design_names = {}
 
 # --- Force Clear All Button ---
 if st.button("❌ Force Clear All (Reset Everything)"):
@@ -26,27 +37,17 @@ if st.button("❌ Force Clear All (Reset Everything)"):
     st.rerun()
 
 # --- Upload Section ---
-design_files = st.file_uploader(
-    "📌 Upload Design Images (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="design_files"
+st.session_state.design_files = st.file_uploader(
+    "📌 Upload Design Images (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True
 )
 shirt_files = st.file_uploader(
-    "🎨 Upload Shirt Templates (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True, key="shirt_files"
+    "🎨 Upload Shirt Templates (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True
 )
 
-# --- Robust Design Names Handling ---
-if "design_names" not in st.session_state:
-    st.session_state.design_names = {}
-
-# Reset design_names if uploaded files changed (prevents ghost entries)
-current_file_names = set([f.name for f in design_files]) if design_files else set()
-stored_file_names = set(st.session_state.design_names.keys())
-if current_file_names != stored_file_names:
-    st.session_state.design_names = {f.name: os.path.splitext(f.name)[0] for f in design_files} if design_files else {}
-
-# --- Design Naming UI ---
-if design_files:
+# --- Design Naming ---
+if st.session_state.design_files:
     st.markdown("### ✏️ Name Each Design")
-    for i, file in enumerate(design_files):
+    for i, file in enumerate(st.session_state.design_files):
         default_name = os.path.splitext(file.name)[0]
         custom_name = st.text_input(
             f"Name for Design {i+1} ({file.name})",
@@ -73,6 +74,7 @@ def generate_mockups_with_progress(design_files, shirt_files, design_names, padd
     total = len(design_files) * len(shirt_files)
     progress = st.progress(0, text="Generating mockups...")
 
+    # Your batch script as a string
     batch_script = r"""@echo off
 setlocal enabledelayedexpansion
 
@@ -86,6 +88,7 @@ echo All images moved into their own folders.
 pause
 """
 
+    # Preload images into memory for speed
     shirt_images = {f.name: Image.open(f).convert("RGBA") for f in shirt_files}
     design_images = {f.name: Image.open(f).convert("RGBA") for f in design_files}
 
@@ -96,6 +99,7 @@ pause
 
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zipf:
+            # Save PNG mockups
             for shirt_file in shirt_files:
                 color_name = os.path.splitext(shirt_file.name)[0]
                 shirt = shirt_images[shirt_file.name]
@@ -134,6 +138,7 @@ pause
                 completed += 1
                 progress.progress(completed / total, text=f"Generating mockups... ({completed}/{total})")
 
+            # After all images for this design, add the batch script
             zipf.writestr("folder_script.bat", batch_script)
 
         zip_buffer.seek(0)
@@ -144,11 +149,11 @@ pause
 
 # --- Run Generation ---
 if st.button("🚀 Generate Mockups"):
-    if not (design_files and shirt_files):
+    if not (st.session_state.design_files and shirt_files):
         st.warning("Please upload at least one design and one shirt template.")
     else:
         st.session_state.zip_files_output = generate_mockups_with_progress(
-            design_files,
+            st.session_state.design_files,
             shirt_files,
             st.session_state.design_names,
             PADDING_RATIO,
@@ -158,7 +163,7 @@ if st.button("🚀 Generate Mockups"):
         st.success("✅ All mockups generated and centered!")
 
 # --- Download Buttons ---
-if "zip_files_output" in st.session_state and st.session_state.zip_files_output:
+if st.session_state.zip_files_output:
     for name, zip_data in st.session_state.zip_files_output.items():
         st.download_button(
             label=f"📦 Download {name}.zip",

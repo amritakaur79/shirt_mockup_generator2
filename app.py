@@ -31,6 +31,11 @@ if "design_files" not in st.session_state:
 if "design_names" not in st.session_state:
     st.session_state.design_names = {}
 
+# --- Force Clear All Button ---
+if st.button("❌ Force Clear All (Reset Everything)"):
+    st.session_state.clear()
+    st.rerun()
+
 # --- Upload Section ---
 st.session_state.design_files = st.file_uploader(
     "📌 Upload Design Images (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True
@@ -38,12 +43,6 @@ st.session_state.design_files = st.file_uploader(
 shirt_files = st.file_uploader(
     "🎨 Upload Shirt Templates (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], accept_multiple_files=True
 )
-
-# --- Clear Design Button ---
-if st.button("🔄 Start Over (Clear Generated Mockups)"):
-    for key in ["design_files", "design_names", "zip_files_output"]:
-        st.session_state.pop(key, None)
-    st.rerun()
 
 # --- Design Naming ---
 if st.session_state.design_files:
@@ -82,7 +81,7 @@ setlocal enabledelayedexpansion
 for %%f in (*.png) do (
     set "filename=%%~nf"
     mkdir "!filename!"
-    move "%%f" "!filename!\"
+    move "%%f" "!filename!\\"
 )
 
 echo All images moved into their own folders.
@@ -135,7 +134,6 @@ pause
                 shirt_copy.save(img_byte_arr, format='PNG')
                 img_byte_arr.seek(0)
                 zipf.writestr(output_name, img_byte_arr.getvalue())
-
 
                 completed += 1
                 progress.progress(completed / total, text=f"Generating mockups... ({completed}/{total})")

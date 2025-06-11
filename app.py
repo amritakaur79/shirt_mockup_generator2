@@ -11,7 +11,7 @@ os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
 
 # --- Configurable limits to avoid OOM ---
 MAX_DESIGNS = 20
-MAX_SHIRTS = 20
+MAX_SHIRTS = 30
 
 st.set_page_config(page_title="Shirt Mockup Generator", layout="centered")
 st.title("👕 Shirt Mockup Generator – Manual Tag for Model Shirts")
@@ -49,7 +49,7 @@ st.session_state.design_files = st.file_uploader(
     accept_multiple_files=True
 )
 shirt_files = st.file_uploader(
-    "🎨 Upload Shirt Templates (PNG, JPG, JPEG) [Max: 20]", 
+    "🎨 Upload Shirt Templates (PNG, JPG, JPEG) [Max: 30]", 
     type=["png", "jpg", "jpeg"], 
     accept_multiple_files=True
 )
